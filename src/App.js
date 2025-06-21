@@ -37,10 +37,11 @@ function App() {
 
       // Load your 3D model
       const loader = new GLTFLoader();
-      loader.load('/model.glb', (gltf) => {
-        model = gltf.scene;
-        model.scale.set(0.6, 0.6, 0.6);
-      });
+      loader.load('model.glb', (gltf) => {
+      model = gltf.scene;
+      model.scale.set(0.6, 0.6, 0.6);
+});
+
 
       const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2);
       const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
