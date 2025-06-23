@@ -53,11 +53,12 @@ function App() {
 
       controller = renderer.xr.getController(0);
       controller.addEventListener('select', () => {
-        if (reticle.visible && model) {
-          const clone = model.clone();
-          clone.position.setFromMatrixPosition(reticle.matrix);
-          clone.quaternion.setFromRotationMatrix(reticle.matrix);
-          scene.add(clone);
+       if (reticle.visible && model && !selectedObject) {
+    // Place only once
+        selectedObject = model.clone();
+        selectedObject.position.setFromMatrixPosition(reticle.matrix);
+        selectedObject.quaternion.setFromRotationMatrix(reticle.matrix);
+        scene.add(selectedObject);
         }
       });
       scene.add(controller);
