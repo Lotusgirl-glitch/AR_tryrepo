@@ -7,7 +7,7 @@ import "./App.css";
 export default function ARMarkerless() {
   const selectedModelRef = useRef(null);
 
-  // Scale functions (must be outside useEffect)
+  // Scale functions
   function scaleUp() {
     if (selectedModelRef.current) {
       selectedModelRef.current.scale.multiplyScalar(1.1);
@@ -60,7 +60,7 @@ export default function ARMarkerless() {
         model.scale.set(0.4, 0.4, 0.4);
       });
 
-      // Reticle (used for hit test visualization)
+      // Reticle
       const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(
         -Math.PI / 2
       );
@@ -70,7 +70,7 @@ export default function ARMarkerless() {
       reticle.visible = false;
       scene.add(reticle);
 
-      // Controller setup
+      // Controller
       controller = renderer.xr.getController(0);
       controller.addEventListener("select", () => {
         if (reticle.visible && model) {
@@ -78,14 +78,13 @@ export default function ARMarkerless() {
             selectedModelRef.current = model.clone();
             scene.add(selectedModelRef.current);
           }
-
           selectedModelRef.current.position.setFromMatrixPosition(reticle.matrix);
           selectedModelRef.current.quaternion.setFromRotationMatrix(reticle.matrix);
         }
       });
       scene.add(controller);
 
-      // Start XR session
+      // XR Session start
       renderer.xr.addEventListener("sessionstart", async () => {
         const session = renderer.xr.getSession();
         const viewerSpace = await session.requestReferenceSpace("viewer");
@@ -94,6 +93,40 @@ export default function ARMarkerless() {
           space: viewerSpace,
         });
 
+        // Inject buttons dynamically AFTER AR starts
+        const buttonContainer = document.createElement("div");
+        buttonContainer.style.position = "absolute";
+        buttonContainer.style.bottom = "20px";
+        buttonContainer.style.left = "50%";
+        buttonContainer.style.transform = "translateX(-50%)";
+        buttonContainer.style.zIndex = "10";
+        buttonContainer.style.display = "flex";
+        buttonContainer.style.gap = "1rem";
+
+        const minusBtn = document.createElement("button");
+        minusBtn.innerText = "-";
+        minusBtn.onclick = scaleDown;
+
+        const plusBtn = document.createElement("button");
+        plusBtn.innerText = "+";
+        plusBtn.onclick = scaleUp;
+
+        // Optional styling (or use a className)
+        [minusBtn, plusBtn].forEach((btn) => {
+          btn.style.fontSize = "1.5rem";
+          btn.style.padding = "0.5rem 1rem";
+          btn.style.background = "white";
+          btn.style.border = "none";
+          btn.style.borderRadius = "8px";
+          btn.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+          btn.style.cursor = "pointer";
+        });
+
+        buttonContainer.appendChild(minusBtn);
+        buttonContainer.appendChild(plusBtn);
+        document.body.appendChild(buttonContainer);
+
+        // Track frame loop
         renderer.setAnimationLoop((timestamp, frame) => {
           if (frame) {
             const hitTestResults = frame.getHitTestResults(hitTestSource);
@@ -122,24 +155,7 @@ export default function ARMarkerless() {
     }
   }, []);
 
-  // Buttons for scaling
-  return (
-    <>
-      <div
-        id="scale-controls"
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-          display: "flex",
-          gap: "1rem",
-        }}
-      >
-        <button onClick={scaleDown}>-</button>
-        <button onClick={scaleUp}>+</button>
-      </div>
-    </>
-  );
+  return null; // UI is injected manually after XR starts
 }
+
+ 
