@@ -1,21 +1,40 @@
-import React, { useEffect } from 'react';
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { ARButton } from 'three/examples/jsm/webxr/ARButton';
+import React, { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { ARButton } from "three/examples/jsm/webxr/ARButton";
+import "./App.css";
 
 export default function ARMarkerless() {
+  const selectedModelRef = useRef(null);
+
+  // Scale functions (must be outside useEffect)
+  function scaleUp() {
+    if (selectedModelRef.current) {
+      selectedModelRef.current.scale.multiplyScalar(1.1);
+    }
+  }
+
+  function scaleDown() {
+    if (selectedModelRef.current) {
+      selectedModelRef.current.scale.multiplyScalar(0.9);
+    }
+  }
+
   useEffect(() => {
     let camera, scene, renderer, controller, reticle;
     let model = null;
-    let selectedModel = null; // globally scoped now
-
 
     init();
 
     function init() {
       // Scene & Camera
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+      camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.01,
+        20
+      );
 
       // Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -24,9 +43,11 @@ export default function ARMarkerless() {
       document.body.appendChild(renderer.domElement);
 
       // Add AR button
-      document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['hit-test']
-      }));
+      document.body.appendChild(
+        ARButton.createButton(renderer, {
+          requiredFeatures: ["hit-test"],
+        })
+      );
 
       // Light
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
@@ -34,13 +55,15 @@ export default function ARMarkerless() {
 
       // Load model
       const loader = new GLTFLoader();
-      loader.load( process.env.PUBLIC_URL + '/model.glb', (gltf) => {
+      loader.load(process.env.PUBLIC_URL + "/model.glb", (gltf) => {
         model = gltf.scene;
         model.scale.set(0.4, 0.4, 0.4);
       });
 
       // Reticle (used for hit test visualization)
-      const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2);
+      const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(
+        -Math.PI / 2
+      );
       const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       reticle = new THREE.Mesh(geometry, material);
       reticle.matrixAutoUpdate = false;
@@ -49,55 +72,27 @@ export default function ARMarkerless() {
 
       // Controller setup
       controller = renderer.xr.getController(0);
-      let selectedModel = null;
+      controller.addEventListener("select", () => {
+        if (reticle.visible && model) {
+          if (!selectedModelRef.current) {
+            selectedModelRef.current = model.clone();
+            scene.add(selectedModelRef.current);
+          }
 
-/*controller.addEventListener('select', () => {
-  if (reticle.visible && model) {
-    if (!placed) {
-      // Place model first time
-      selectedModel = model.clone();
-      selectedModel.position.setFromMatrixPosition(reticle.matrix);
-      selectedModel.quaternion.setFromRotationMatrix(reticle.matrix);
-      scene.add(selectedModel);
-      placed = true;
-    } else if (selectedModel) {
-      // Raycast from camera to reticle
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera({ x: 0, y: 0 }, camera); // center of screen
-      const intersects = raycaster.intersectObject(selectedModel, true);
-
-      if (intersects.length > 0) {
-        // If model was tapped again → move it
-        selectedModel.position.setFromMatrixPosition(reticle.matrix);
-        selectedModel.quaternion.setFromRotationMatrix(reticle.matrix);
-      }
-    }
-  }
-}); */
-
-controller.addEventListener('select', () => {
-  if (reticle.visible && model) {
-    if (!selectedModel) {
-      // First placement
-      selectedModel = model.clone();
-      scene.add(selectedModel);
-    }
-
-    // Move the model to new reticle position every time
-    selectedModel.position.setFromMatrixPosition(reticle.matrix);
-    selectedModel.quaternion.setFromRotationMatrix(reticle.matrix);
-  }
-});
-
-
+          selectedModelRef.current.position.setFromMatrixPosition(reticle.matrix);
+          selectedModelRef.current.quaternion.setFromRotationMatrix(reticle.matrix);
+        }
+      });
       scene.add(controller);
 
       // Start XR session
-      renderer.xr.addEventListener('sessionstart', async () => {
+      renderer.xr.addEventListener("sessionstart", async () => {
         const session = renderer.xr.getSession();
-        const viewerSpace = await session.requestReferenceSpace('viewer');
+        const viewerSpace = await session.requestReferenceSpace("viewer");
         const refSpace = renderer.xr.getReferenceSpace();
-        const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+        const hitTestSource = await session.requestHitTestSource({
+          space: viewerSpace,
+        });
 
         renderer.setAnimationLoop((timestamp, frame) => {
           if (frame) {
@@ -117,7 +112,7 @@ controller.addEventListener('select', () => {
       });
 
       // Resize
-      window.addEventListener('resize', onWindowResize, false);
+      window.addEventListener("resize", onWindowResize, false);
     }
 
     function onWindowResize() {
@@ -127,5 +122,24 @@ controller.addEventListener('select', () => {
     }
   }, []);
 
-  return null;
+  // Buttons for scaling
+  return (
+    <>
+      <div
+        id="scale-controls"
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
+          display: "flex",
+          gap: "1rem",
+        }}
+      >
+        <button onClick={scaleDown}>-</button>
+        <button onClick={scaleUp}>+</button>
+      </div>
+    </>
+  );
 }
