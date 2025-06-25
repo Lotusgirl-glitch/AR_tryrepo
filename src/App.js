@@ -7,7 +7,8 @@ export default function ARMarkerless() {
   useEffect(() => {
     let camera, scene, renderer, controller, reticle;
     let model = null;
-    let placed = false;
+    let selectedModel = null; // globally scoped now
+
 
     init();
 
@@ -50,7 +51,7 @@ export default function ARMarkerless() {
       controller = renderer.xr.getController(0);
       let selectedModel = null;
 
-controller.addEventListener('select', () => {
+/*controller.addEventListener('select', () => {
   if (reticle.visible && model) {
     if (!placed) {
       // Place model first time
@@ -72,7 +73,22 @@ controller.addEventListener('select', () => {
       }
     }
   }
+}); */
+
+controller.addEventListener('select', () => {
+  if (reticle.visible && model) {
+    if (!selectedModel) {
+      // First placement
+      selectedModel = model.clone();
+      scene.add(selectedModel);
+    }
+
+    // Move the model to new reticle position every time
+    selectedModel.position.setFromMatrixPosition(reticle.matrix);
+    selectedModel.quaternion.setFromRotationMatrix(reticle.matrix);
+  }
 });
+
 
       scene.add(controller);
 
