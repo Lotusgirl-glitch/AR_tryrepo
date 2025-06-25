@@ -1,1 +1,9 @@
+ #scale-controls button {
+  font-size: 1.5rem;
+  padding: 0.5rem 1rem;
+  background: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
  
