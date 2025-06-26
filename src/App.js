@@ -56,7 +56,7 @@ export default function ARMarkerless() {
           if (!selectedModelRef.current) {
             selectedModelRef.current = model.clone();
             scene.add(selectedModelRef.current);
-            createInSceneButtons();
+            createFloatingButtons();
           }
 
           selectedModelRef.current.position.setFromMatrixPosition(reticle.matrix);
@@ -103,6 +103,7 @@ export default function ARMarkerless() {
             }
           }
 
+          updateFloatingButtonsPosition();
           renderer.render(scene, camera);
         });
       });
@@ -110,27 +111,55 @@ export default function ARMarkerless() {
       window.addEventListener("resize", onWindowResize);
     }
 
-    function createInSceneButtons() {
+    function createFloatingButtons() {
       const buttonGeo = new THREE.BoxGeometry(0.08, 0.04, 0.01);
 
       const matUp = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       scaleUpButton = new THREE.Mesh(buttonGeo, matUp);
-      scaleUpButton.position.set(0.15, 0.05, 0);
       scaleUpButton.name = "scaleUp";
+      scene.add(scaleUpButton);
 
       const matDown = new THREE.MeshBasicMaterial({ color: 0xff0000 });
       scaleDownButton = new THREE.Mesh(buttonGeo, matDown);
-      scaleDownButton.position.set(-0.15, 0.05, 0);
       scaleDownButton.name = "scaleDown";
+      scene.add(scaleDownButton);
 
       const matRotate = new THREE.MeshBasicMaterial({ color: 0x0000ff });
       rotateButton = new THREE.Mesh(buttonGeo, matRotate);
-      rotateButton.position.set(0, 0.05, -0.15);
       rotateButton.name = "rotate";
+      scene.add(rotateButton);
+    }
 
-      selectedModelRef.current.add(scaleUpButton);
-      selectedModelRef.current.add(scaleDownButton);
-      selectedModelRef.current.add(rotateButton);
+    function updateFloatingButtonsPosition() {
+      if (!camera || !scaleUpButton || !scaleDownButton || !rotateButton) return;
+
+      const camPos = new THREE.Vector3();
+      camera.getWorldPosition(camPos);
+
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+
+      const up = new THREE.Vector3();
+      up.copy(camera.up);
+
+      const right = new THREE.Vector3();
+      camDir.clone().cross(up).normalize();
+
+      const offset = 0.5;
+
+      scaleUpButton.position.copy(camPos)
+        .add(camDir.clone().multiplyScalar(offset))
+        .add(right.clone().multiplyScalar(0.15))
+        .add(up.clone().multiplyScalar(-0.1));
+
+      scaleDownButton.position.copy(camPos)
+        .add(camDir.clone().multiplyScalar(offset))
+        .add(right.clone().multiplyScalar(-0.15))
+        .add(up.clone().multiplyScalar(-0.1));
+
+      rotateButton.position.copy(camPos)
+        .add(camDir.clone().multiplyScalar(offset))
+        .add(up.clone().multiplyScalar(-0.25));
     }
 
     function onWindowResize() {
@@ -142,4 +171,3 @@ export default function ARMarkerless() {
 
   return null;
 }
-
