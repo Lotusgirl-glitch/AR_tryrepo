@@ -30,7 +30,7 @@ export default function ARMarkerless() {
 
       document.body.appendChild(
         ARButton.createButton(renderer, {
-          requiredFeatures: ["hit-test"],
+          requiredFeatures: ["hit-test"]
         })
       );
 
@@ -56,12 +56,11 @@ export default function ARMarkerless() {
           if (!selectedModelRef.current) {
             selectedModelRef.current = model.clone();
             scene.add(selectedModelRef.current);
-            createFloatingButtons();
           }
 
           selectedModelRef.current.position.setFromMatrixPosition(reticle.matrix);
           selectedModelRef.current.quaternion.setFromRotationMatrix(reticle.matrix);
-        } else if (selectedModelRef.current) {
+        } else {
           const raycaster = new THREE.Raycaster();
           raycaster.setFromCamera({ x: 0, y: 0 }, camera);
           const intersects = raycaster.intersectObjects([
@@ -70,7 +69,7 @@ export default function ARMarkerless() {
             rotateButton,
           ], true);
 
-          if (intersects.length > 0) {
+          if (intersects.length > 0 && selectedModelRef.current) {
             const objectHit = intersects[0].object;
             if (objectHit.name === "scaleUp") {
               selectedModelRef.current.scale.multiplyScalar(1.1);
@@ -90,6 +89,8 @@ export default function ARMarkerless() {
         const refSpace = renderer.xr.getReferenceSpace();
         const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
 
+        createSceneAnchoredButtons();
+
         renderer.setAnimationLoop((timestamp, frame) => {
           if (frame) {
             const hitTestResults = frame.getHitTestResults(hitTestSource);
@@ -101,65 +102,44 @@ export default function ARMarkerless() {
             } else {
               reticle.visible = false;
             }
-          }
 
-          updateFloatingButtonsPosition();
-          renderer.render(scene, camera);
+            updateButtonPositions();
+            renderer.render(scene, camera);
+          }
         });
       });
 
       window.addEventListener("resize", onWindowResize);
     }
 
-    function createFloatingButtons() {
+    function createSceneAnchoredButtons() {
       const buttonGeo = new THREE.BoxGeometry(0.08, 0.04, 0.01);
 
       const matUp = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       scaleUpButton = new THREE.Mesh(buttonGeo, matUp);
       scaleUpButton.name = "scaleUp";
-      scene.add(scaleUpButton);
 
       const matDown = new THREE.MeshBasicMaterial({ color: 0xff0000 });
       scaleDownButton = new THREE.Mesh(buttonGeo, matDown);
       scaleDownButton.name = "scaleDown";
-      scene.add(scaleDownButton);
 
       const matRotate = new THREE.MeshBasicMaterial({ color: 0x0000ff });
       rotateButton = new THREE.Mesh(buttonGeo, matRotate);
       rotateButton.name = "rotate";
-      scene.add(rotateButton);
+
+      scene.add(scaleUpButton, scaleDownButton, rotateButton);
     }
 
-    function updateFloatingButtonsPosition() {
-      if (!camera || !scaleUpButton || !scaleDownButton || !rotateButton) return;
+    function updateButtonPositions() {
+      const cameraDirection = new THREE.Vector3();
+      camera.getWorldDirection(cameraDirection);
+      cameraDirection.multiplyScalar(0.5);
 
-      const camPos = new THREE.Vector3();
-      camera.getWorldPosition(camPos);
+      const basePos = new THREE.Vector3().copy(camera.position).add(cameraDirection);
 
-      const camDir = new THREE.Vector3();
-      camera.getWorldDirection(camDir);
-
-      const up = new THREE.Vector3();
-      up.copy(camera.up);
-
-      const right = new THREE.Vector3();
-      camDir.clone().cross(up).normalize();
-
-      const offset = 0.5;
-
-      scaleUpButton.position.copy(camPos)
-        .add(camDir.clone().multiplyScalar(offset))
-        .add(right.clone().multiplyScalar(0.15))
-        .add(up.clone().multiplyScalar(-0.1));
-
-      scaleDownButton.position.copy(camPos)
-        .add(camDir.clone().multiplyScalar(offset))
-        .add(right.clone().multiplyScalar(-0.15))
-        .add(up.clone().multiplyScalar(-0.1));
-
-      rotateButton.position.copy(camPos)
-        .add(camDir.clone().multiplyScalar(offset))
-        .add(up.clone().multiplyScalar(-0.25));
+      scaleUpButton.position.set(basePos.x + 0.15, basePos.y - 0.2, basePos.z);
+      scaleDownButton.position.set(basePos.x - 0.15, basePos.y - 0.2, basePos.z);
+      rotateButton.position.set(basePos.x, basePos.y - 0.3, basePos.z);
     }
 
     function onWindowResize() {
