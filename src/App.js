@@ -1,153 +1,191 @@
-// File: src/ARMarkerless.js
-import React, { useEffect, useRef } from "react";
+// App.jsx
+import React, { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import { ARButton } from "three/examples/jsm/webxr/ARButton";
+import Hammer from "hammerjs";
 
-export default function ARMarkerless() {
-  const selectedModelRef = useRef(null);
+export default function App() {
+  const containerRef = useRef();
+  const modelRef = useRef();
+  const rendererRef = useRef();
+  const cameraRef = useRef();
+  const sceneRef = useRef();
+
+  const [cameraStream, setCameraStream] = useState(null);
+  const [modelPlaced, setModelPlaced] = useState(false);
+  const isDragging = useRef(false);
+  const scale = useRef(1);
+  const rotation = useRef(0);
 
   useEffect(() => {
-    let camera, scene, renderer, controller, reticle;
-    let model = null;
-    let scaleUpButton, scaleDownButton, rotateButton;
+    // === Scene Setup ===
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      100
+    );
+    camera.position.z = 2;
+    sceneRef.current = scene;
+    cameraRef.current = camera;
 
-    init();
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    containerRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        70,
-        window.innerWidth / window.innerHeight,
-        0.01,
-        20
-      );
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(2, 4, 6);
+    scene.add(dirLight);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
+    // Load model (but don't add to scene until placed)
+    const loader = new GLTFLoader();
+    loader.load(process.env.PUBLIC_URL + "/chair.glb",(gltf) => {
+    const model = gltf.scene;
+    model.scale.set(0.5, 0.5, 0.5);
+    model.visible = false;
+    scene.add(model);
+    modelRef.current = model;
+  },
+  undefined,
+  (error) => {
+    console.error("Failed to load GLB:", error);
+  }
+);
 
-      document.body.appendChild(
-        ARButton.createButton(renderer, {
-          requiredFeatures: ["hit-test"]
-        })
-      );
+    const animate = () => {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    };
+    animate();
 
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(light);
+    // === Gesture Setup ===
+    const hammer = new Hammer(containerRef.current);
+    hammer.get("pinch").set({ enable: true });
+    hammer.get("rotate").set({ enable: true });
 
-      const loader = new GLTFLoader();
-      loader.load(process.env.PUBLIC_URL + "/model.glb", (gltf) => {
-        model = gltf.scene;
-        model.scale.set(0.4, 0.4, 0.4);
-      });
+    hammer.on("pan", (e) => {
+      if (!modelRef.current || !modelPlaced) return;
+      const dx = (e.deltaX / window.innerWidth) * 2;
+      const dy = -(e.deltaY / window.innerHeight) * 2;
+      modelRef.current.position.x += dx;
+      modelRef.current.position.y += dy;
+    });
 
-      const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2);
-      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      reticle = new THREE.Mesh(geometry, material);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
+    hammer.on("pinch", (e) => {
+      if (!modelRef.current || !modelPlaced) return;
+      scale.current = e.scale;
+      modelRef.current.scale.setScalar(scale.current * 0.5);
+    });
 
-      controller = renderer.xr.getController(0);
-      controller.addEventListener("select", () => {
-        if (reticle.visible && model) {
-          if (!selectedModelRef.current) {
-            selectedModelRef.current = model.clone();
-            scene.add(selectedModelRef.current);
-          }
+    hammer.on("rotate", (e) => {
+      if (!modelRef.current || !modelPlaced) return;
+      rotation.current = e.rotation;
+      modelRef.current.rotation.y = rotation.current * (Math.PI / 180);
+    });
 
-          selectedModelRef.current.position.setFromMatrixPosition(reticle.matrix);
-          selectedModelRef.current.quaternion.setFromRotationMatrix(reticle.matrix);
-        } else {
-          const raycaster = new THREE.Raycaster();
-          raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-          const intersects = raycaster.intersectObjects([
-            scaleUpButton,
-            scaleDownButton,
-            rotateButton,
-          ], true);
-
-          if (intersects.length > 0 && selectedModelRef.current) {
-            const objectHit = intersects[0].object;
-            if (objectHit.name === "scaleUp") {
-              selectedModelRef.current.scale.multiplyScalar(1.1);
-            } else if (objectHit.name === "scaleDown") {
-              selectedModelRef.current.scale.multiplyScalar(0.9);
-            } else if (objectHit.name === "rotate") {
-              selectedModelRef.current.rotation.y += Math.PI / 8;
-            }
-          }
-        }
-      });
-      scene.add(controller);
-
-      renderer.xr.addEventListener("sessionstart", async () => {
-        const session = renderer.xr.getSession();
-        const viewerSpace = await session.requestReferenceSpace("viewer");
-        const refSpace = renderer.xr.getReferenceSpace();
-        const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-
-        createSceneAnchoredButtons();
-
-        renderer.setAnimationLoop((timestamp, frame) => {
-          if (frame) {
-            const hitTestResults = frame.getHitTestResults(hitTestSource);
-            if (hitTestResults.length > 0) {
-              const hit = hitTestResults[0];
-              const pose = hit.getPose(refSpace);
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
-            } else {
-              reticle.visible = false;
-            }
-
-            updateButtonPositions();
-            renderer.render(scene, camera);
-          }
-        });
-      });
-
-      window.addEventListener("resize", onWindowResize);
-    }
-
-    function createSceneAnchoredButtons() {
-      const buttonGeo = new THREE.BoxGeometry(0.08, 0.04, 0.01);
-
-      const matUp = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      scaleUpButton = new THREE.Mesh(buttonGeo, matUp);
-      scaleUpButton.name = "scaleUp";
-
-      const matDown = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      scaleDownButton = new THREE.Mesh(buttonGeo, matDown);
-      scaleDownButton.name = "scaleDown";
-
-      const matRotate = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      rotateButton = new THREE.Mesh(buttonGeo, matRotate);
-      rotateButton.name = "rotate";
-
-      scene.add(scaleUpButton, scaleDownButton, rotateButton);
-    }
-
-    function updateButtonPositions() {
-      const cameraDirection = new THREE.Vector3();
-      camera.getWorldDirection(cameraDirection);
-      cameraDirection.multiplyScalar(0.5);
-
-      const basePos = new THREE.Vector3().copy(camera.position).add(cameraDirection);
-
-      scaleUpButton.position.set(basePos.x + 0.15, basePos.y - 0.2, basePos.z);
-      scaleDownButton.position.set(basePos.x - 0.15, basePos.y - 0.2, basePos.z);
-      rotateButton.position.set(basePos.x, basePos.y - 0.3, basePos.z);
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    return () => hammer.destroy();
   }, []);
 
-  return null;
+  // === Tap to Place ===
+  useEffect(() => {
+    const onClick = (e) => {
+      if (!modelRef.current || modelPlaced) return;
+
+      const bounds = containerRef.current.getBoundingClientRect();
+      const x = ((e.clientX - bounds.left) / bounds.width) * 2 - 1;
+      const y = -((e.clientY - bounds.top) / bounds.height) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera({ x, y }, cameraRef.current);
+
+      const groundZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      const point = new THREE.Vector3();
+      raycaster.ray.intersectPlane(groundZ, point);
+
+      modelRef.current.position.copy(point);
+      modelRef.current.visible = true;
+      setModelPlaced(true);
+    };
+
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, [modelPlaced]);
+
+  // === Start Camera ===
+   useEffect(() => {
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } }
+      });
+      setCameraStream(stream);
+    } catch (err) {
+      console.warn("Back camera not found, trying default camera...");
+      // fallback to any camera
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setCameraStream(stream);
+    }
+  }
+
+  startCamera();
+}, []);
+
+
+  return (
+    <>
+      {/* Camera Feed */}
+      {cameraStream && (
+        <video
+          autoPlay
+          playsInline
+          muted
+          ref={(video) => {
+            if (video) video.srcObject = cameraStream;
+          }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            objectFit: "cover",
+            zIndex: -1,
+          }}
+        />
+      )}
+
+      {/* Three.js canvas */}
+      <div
+        ref={containerRef}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          zIndex: 1,
+        }}
+      />
+
+      {/* Instructions */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          width: "100%",
+          textAlign: "center",
+          color: "white",
+          fontSize: "16px",
+          textShadow: "0 0 5px black",
+        }}
+      >
+        {modelPlaced
+          ? "Drag, pinch, or rotate the object"
+          : "Tap on screen to place the object"}
+      </div>
+    </>
+  );
 }
